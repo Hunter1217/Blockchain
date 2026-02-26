@@ -1,5 +1,6 @@
 // Source: Dr. Pramod Viswanath, Principles of Blockchains (Princeton).
 use serde::{Serialize, Deserialize};
+use ring::digest;
 
 // 20-byte address
 #[derive(Eq, PartialEq, Serialize, Deserialize, Clone, Hash, Default, Copy)]
@@ -47,9 +48,28 @@ impl std::fmt::Debug for Address {
     }
 }
 
+
+/*
+Function from_public_key_bytes: Takes an input of bytes (password, string, block) and hashes that using SHA256 from the digest module. 
+It then takes that hash, and gets the actual data inside of it using as_ref(). It then takes the last 20 bytes of that hash and converts them into a Address struct.
+
+Expects: 
+    bytes: a reference (&) to a slice of bytes [u8] of any size
+
+Returns:
+    Address
+
+*/
 impl Address {
     pub fn from_public_key_bytes(bytes: &[u8]) -> Address {
-        unimplemented!()
+        let digest = digest::digest(&digest::SHA256, bytes);
+        let hash = digest.as_ref();
+        let output_bytes = &hash[hash.len() - 20..];
+
+        let mut array = [0u8; 20];
+        array.copy_from_slice(output_bytes);
+
+        Address(array)
     }
 }
 
