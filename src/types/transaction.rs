@@ -5,6 +5,9 @@ use rand::Rng;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Transaction {
+    sender: Address,
+    receiver: Address,
+    value: u64
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -13,7 +16,7 @@ pub struct SignedTransaction {
 
 /// Create digital signature of a transaction
 pub fn sign(t: &Transaction, key: &Ed25519KeyPair) -> Signature {
-    unimplemented!()
+    
 }
 
 /// Verify digital signature of a transaction, using public key instead of secret key
