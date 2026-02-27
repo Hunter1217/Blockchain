@@ -62,11 +62,11 @@ Returns:
 */
 impl Address {
     pub fn from_public_key_bytes(bytes: &[u8]) -> Address {
-        let digest = digest::digest(&digest::SHA256, bytes);
-        let hash = digest.as_ref();
-        let output_bytes = &hash[hash.len() - 20..];
+        let digest = digest::digest(&digest::SHA256, bytes); // create the hash of bytes, which is stored as digest which holds the hash bytes and metadata about the algorithm
+        let hash = digest.as_ref(); //returns a borrowed view into digest but doesnt allocate memory
+        let output_bytes = &hash[hash.len() - 20..]; //slice the last 20 bytes from length
 
-        let mut array = [0u8; 20];
+        let mut array = [0u8; 20]; //allocate actual memory 
         array.copy_from_slice(output_bytes);
 
         Address(array)
