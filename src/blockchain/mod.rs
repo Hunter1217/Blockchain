@@ -1,8 +1,8 @@
 // Source: Dr. Pramod Viswanath, Principles of Blockchains (Princeton).
-use crate::types::block::Block;
+use crate::types::block::{Block, Header, Content};
 use crate::types::hash::{H256, Hashable};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::HashMap;
-use ring::digest;
 
 pub struct Blockchain {
     blocks: HashMap<H256, Block>,
@@ -14,10 +14,21 @@ pub struct Blockchain {
 impl Blockchain {
     /// Create a new blockchain, only containing the genesis block
     pub fn new() -> Self {
-        let genesis_parent = H256::default();
-
-        let genesis_block = crate::types::block::generate_random_block(&genesis_parent);
-
+        let genesis_block = Block {
+            header: Header {
+                parent: H256::default(),
+                nonce: 0,
+                difficulty: H256::from([255u8; 32]),
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("time went backwards")
+                    .as_millis(),
+                merkle_root: H256::default(),
+            },
+            content: Content {
+                transactions: vec![],
+        },
+    };
         let genesis_hash = genesis_block.hash();
 
         let mut blocks = HashMap::new();
@@ -60,6 +71,10 @@ impl Blockchain {
     // Get the last blocks hash of the longest chain
     pub fn tip(&self) -> H256 {
         self.tip
+    }
+
+    pub fn tip_block(&self) -> &Block {
+        self.blocks.get(&self.tip).expect("tip block must exist")
     }
 
     // Get all blocks hashes of the longest chain, ordered from genesis to the tip

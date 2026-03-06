@@ -4,11 +4,15 @@ pub mod worker;
 use log::info;
 
 use crossbeam::channel::{unbounded, Receiver, Sender, TryRecvError};
-use std::time;
-
+use std::time::{SystemTime, UNIX_EPOCH, Duration};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
+use crate::types::block::{Header, Content};
+use crate::blockchain::Blockchain;
 use crate::types::block::Block;
+use crate::types::hash::H256;
+use crate::types::hash::Hashable;
 
 enum ControlSignal {
     Start(u64), // the number controls the lambda of interval between block generation
@@ -27,6 +31,7 @@ pub struct Context {
     control_chan: Receiver<ControlSignal>,
     operating_state: OperatingState,
     finished_block_chan: Sender<Block>,
+    bc_ref: Arc<Mutex<Blockchain>>,
 }
 
 #[derive(Clone)]
@@ -35,7 +40,8 @@ pub struct Handle {
     control_chan: Sender<ControlSignal>,
 }
 
-pub fn new() -> (Context, Handle, Receiver<Block>) {
+pub fn new(my_chain: &Arc<Mutex<Blockchain>>) -> (Context, Handle, Receiver<Block>) {
+    
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
     let (finished_block_sender, finished_block_receiver) = unbounded();
 
@@ -43,6 +49,7 @@ pub fn new() -> (Context, Handle, Receiver<Block>) {
         control_chan: signal_chan_receiver,
         operating_state: OperatingState::Paused,
         finished_block_chan: finished_block_sender,
+        bc_ref: Arc::clone(my_chain),
     };
 
     let handle = Handle {
@@ -54,7 +61,8 @@ pub fn new() -> (Context, Handle, Receiver<Block>) {
 
 #[cfg(any(test,test_utilities))]
 fn test_new() -> (Context, Handle, Receiver<Block>) {
-    new()
+    let blockchain = Arc::new(Mutex::new(Blockchain::new()));
+    new(&blockchain)
 }
 
 impl Handle {
@@ -86,8 +94,10 @@ impl Context {
 
     fn miner_loop(&mut self) {
         // main mining loop
+        let mut nonce = 0u32;
         loop {
             // check and react to control signals
+
             match self.operating_state {
                 OperatingState::Paused => {
                     let signal = self.control_chan.recv().unwrap();
@@ -120,9 +130,7 @@ impl Context {
                                 info!("Miner starting in continuous mode with lambda {}", i);
                                 self.operating_state = OperatingState::Run(i);
                             }
-                            ControlSignal::Update => {
-                                unimplemented!()
-                            }
+                            ControlSignal::Update => {}
                         };
                     }
                     Err(TryRecvError::Empty) => {}
@@ -134,14 +142,46 @@ impl Context {
             }
 
             // TODO for student: actual mining, create a block
+
+            let (new_parent, new_difficulty) = {
+                let blockchain = self.bc_ref.lock().unwrap();
+                let tip_block = blockchain.tip_block();
+                let new_parent = blockchain.tip();
+                let new_difficulty = tip_block.get_difficulty();
+                (new_parent, new_difficulty)
+            };
+
+            let new_block = Block{
+                header: Header{
+                    parent: new_parent,
+                    timestamp: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("time should go forward")
+                        .as_millis(),
+                    difficulty: new_difficulty,
+                    merkle_root: H256::default(),
+                    nonce: nonce,
+                },
+                content: Content{ transactions: vec![]}
+            };
+
             // TODO for student: if block mining finished, you can have something like: self.finished_block_chan.send(block.clone()).expect("Send finished block error");
+
+            if new_block.hash() <= new_block.get_difficulty(){
+                {
+                    let mut blockchain = self.bc_ref.lock().unwrap();
+                    blockchain.insert(&new_block);
+                }
+                self.finished_block_chan.send(new_block.clone()).expect("Send finished block error");
+            }
 
             if let OperatingState::Run(i) = self.operating_state {
                 if i != 0 {
-                    let interval = time::Duration::from_micros(i as u64);
+                    let interval = std::time::Duration::from_micros(i as u64);
                     thread::sleep(interval);
                 }
             }
+            nonce = nonce.wrapping_add(1);
         }
     }
 }
